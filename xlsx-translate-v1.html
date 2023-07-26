@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>xlsx translate</title>
+    <script src="jquery-3.1.1.min.js"></script>
+    <script lang="javascript" src="xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="title">BOM處理</div>
+    <div class="container">
+        <fieldset class="area">
+            <legend><h2>BOM處理1</h2></legend>
+            <div>
+                <label for="fileName1">輸出檔名(甭副檔名)：</label>
+                <input type="text" name="fileName1" id="fileName1">
+                <label for="sheetName1">工作表名稱：</label>
+                <input type="text" name="sheetName1" id="sheetName1">
+            </div>
+            <div class="action">
+                <input type="file" id="upload_file_type1">
+                <button onclick="excelTranslate('1')">轉換並下載</button>
+            </div>
+        </fieldset>
+        <fieldset class="area">
+            <legend><h2>BOM處理2</h2></legend>
+            <div>
+                <label for="fileName2">輸出檔名(甭副檔名)：</label>
+                <input type="text" name="fileName2" id="fileName2">
+                <label for="sheetName2">工作表名稱：</label>
+                <input type="text" name="sheetName2" id="sheetName2">
+            </div>
+            <div class="action">
+                <input type="file" id="upload_file_type2">
+                <button onclick="excelTranslate('2')">轉換並下載</button>
+            </div>
+        </fieldset>
+    </div>
+    
+    <!-- <div id="show_data"></div> -->
+</body>
+<script>
+    let readResult = [];
+    $(document).ready(function() {
+        $('#upload_file_type1').on('change', function(e) {
+            const files = e.target.files;
+            const thisFile = files[0];
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = e.target.result;
+                readResult = readxlsx(data, "1");
+                // let viewData = "";
+                // readResult.forEach(ele => {
+                //     viewData += `<div>${ele}</div>`;
+                // });
+                // $('#show_data').html(viewData);
+            }
+            reader.readAsBinaryString(thisFile);
+        });
+        $('#upload_file_type2').on('change', function(e) {
+            const files = e.target.files;
+            const thisFile = files[0];
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = e.target.result;
+                readResult = readxlsx(data, "2");
+            }
+            reader.readAsBinaryString(thisFile);
+        });
+    });
+
+    function readxlsx(inputData, bomType) {
+        let workbook = XLSX.read(inputData, { type: 'binary'});
+        let originData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 })
+        let result = [];
+        if (bomType === "1") {
+            result.push(["材料品號", "品名", "規格", "單片用量", "類別"]);
+        } else {
+            result.push(["", "", "材料品號", "品名", "規格", "單片用量", "類別", "", "", "", "備註"]);
+        };
+        let rowForPush = [];
+        let typeArray = [];
+        let spliceIndex = 0;
+        // 刪除第一列需要的資料之前的資料
+        for (let i = 0; i < originData.length; i++) {
+            const ele = originData[i];
+            if (bomType === "2" && typeof ele[0] === "number") {
+                spliceIndex = i;
+                break;
+            }
+            if (bomType === "1" && ele[12] === "PCS") {
+                spliceIndex = i;
+                break;
+            }
+        }
+        originData.splice(0, spliceIndex);
+        console.log("初步過濾後資料:", originData);
+        if (bomType === "1") {
+            originData.forEach((ele, i, arr) => {
+                let dataBeginFlag = false;
+                let dataEndFlag = false;
+                let typeBeginFlag = false;
+                let nameRowFlag = false;
+
+                // 判斷每筆資料開始列 陣列裡有PCS
+                if (arr[i].indexOf("PCS") !== -1) {
+                    dataBeginFlag = true;
+                } else {
+                    dataBeginFlag = false;
+                };
+                // 判斷每筆資料結束列 資料最後一筆或下一筆陣列裡有PCS
+                if (i === originData.length - 1 || arr[i + 1].indexOf("PCS") !== -1) {
+                    dataEndFlag = true;
+                } else {
+                    dataEndFlag = false;
+                };
+                // 判斷是否為產品名稱列 通常為開始列下一列
+                if (i >= 1 && arr[i - 1].indexOf("PCS") !== -1) {
+                    nameRowFlag = true;
+                } else {
+                    nameRowFlag = false;
+                };
+                // 判斷是否為類別類 通常為開始列的下兩列&&最後一列
+                if (i >= 2 && arr[i - 2].indexOf("PCS") !== -1) {
+                    typeBeginFlag = true;
+                } else {
+                    typeBeginFlag = false;
+                };
+                // 判斷是否為中間類別類
+                if (!dataBeginFlag && !dataEndFlag && !nameRowFlag) typeBeginFlag = true;
+                // 推入資料 ["材料品號", "品名", "規格", "單片用量", "類別"]
+                if (dataBeginFlag) {
+                    rowForPush.push(ele[4], arr[i + 1][4], "", ele[8]);
+                } else if (!nameRowFlag && (typeBeginFlag || dataEndFlag)) {
+                    typeArray.push(ele[4]);
+                };
+                // 將類別每個陣列合併推入字串後推入資料
+                if (dataEndFlag) {
+                    let typeMerged = "";
+                    typeArray.forEach(x => typeMerged += x);
+                    rowForPush.push(typeMerged);
+                    result.push(rowForPush);
+                    typeArray = [];
+                    rowForPush = [];
+                }
+            });
+        } else {
+            originData.forEach((ele, i ,arr) => {
+                let dataBeginFlag = false;
+                let dataEndFlag = false;
+                let typeBeginFlag = false;
+
+                // 判斷每筆資料開始列 陣列裡第0筆是數字
+                if (typeof arr[i][0] === "number") {
+                    dataBeginFlag = true;
+                } else {
+                    dataBeginFlag = false;
+                };
+                // 判斷每筆資料結束列 資料最後一筆或下一筆陣列裡第0筆是數字
+                if (i === originData.length - 1 || typeof arr[i + 1][0] === "number") {
+                    dataEndFlag = true;
+                } else {
+                    dataEndFlag = false;
+                };
+                // 判斷是否為中間類別類
+                if (!dataBeginFlag && !dataEndFlag) typeBeginFlag = true;
+                // 推入資料 ["序號", "STUFF", "材料品號", "品名", "規格", "單片用量", "類別", "", "", "", "備註", "應該是廠商名稱"]
+                if (dataBeginFlag) {
+                    rowForPush.push(ele[0], ele[3], ele[6], ele[8], ele[4], ele[1], "", "", "", "", "", ele[5]);
+                    typeArray.push(ele[2]);
+                }
+                if (typeBeginFlag || dataEndFlag) {
+                    typeArray.push(ele[2]);
+                };
+                // 將類別每個陣列合併推入字串後推入資料
+                if (dataEndFlag) {
+                    let typeMerged = "";
+                    typeArray.forEach(x => typeMerged += x);
+                    rowForPush[6] = typeMerged;
+                    result.push(rowForPush);
+                    typeArray = [];
+                    rowForPush = [];
+                }
+            });
+        }
+        console.log(`轉換結果:`, result);
+        return result;
+    };
+
+    function excelTranslate(type) {
+        let workbook = XLSX.utils.book_new();
+        let worksheet = XLSX.utils.aoa_to_sheet(readResult);
+        let fileName = $(`#fileName${type}`).val() ? $(`#fileName${type}`).val() : "output";
+        let sheetName = $(`#sheetName${type}`).val() ? $(`#sheetName${type}`).val() : "Sheet1";
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+        XLSX.writeFile(workbook, `${fileName}.xlsx`);
+    };
+</script>
+
+<style>
+    body {
+        background-color: black;
+        color: white;
+    }
+    .title {
+        font-size: 100px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 2.5em;
+        font-weight: bold;
+        background-image: 
+            linear-gradient(to right, red,orange,yellow,green,blue,indigo,violet, red); 
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: color-change 200s linear infinite, bounce 3s 2s ease infinite;
+    }
+    @keyframes color-change {
+        to {
+            background-position: 4500vh;
+        }
+    }
+    @keyframes bounce {
+        15%, 25%, 35% {
+            transform: translateY(0px);
+        }
+        20% {
+            transform: translateY(-40px);
+        }
+        30% {
+            transform: translateY(-15px);
+        }
+    }
+    .container {
+        margin: 0 auto;
+        max-width: 1500px;
+        height: 800px;
+    }
+    .action {
+        margin-top: 5px;
+        display: flex;
+        justify-content: space-between;
+    }
+    .area {
+        margin: 0 auto;
+        max-width: 700px;
+        max-height: 150px;
+    }
+</style>
+</html>
