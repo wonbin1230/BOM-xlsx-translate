@@ -78,7 +78,7 @@
         let originData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 })
         let result = [];
         if (bomType === "1") {
-            result.push(["材料品號", "品名", "規格", "單片用量", "類別"]);
+            result.push(["序號", "材料品號", "品名", "規格", "單片用量", "類別"]);
         } else {
             result.push(["", "", "材料品號", "品名", "規格", "單片用量", "類別", "", "", "", "備註"]);
         };
@@ -134,7 +134,7 @@
                 if (!dataBeginFlag && !dataEndFlag && !nameRowFlag) typeBeginFlag = true;
                 // 推入資料 ["材料品號", "品名", "規格", "單片用量", "類別"]
                 if (dataBeginFlag) {
-                    rowForPush.push(ele[4], arr[i + 1][4], "", ele[8]);
+                    rowForPush.push(ele[1], ele[4], arr[i + 1][4], "", ele[8]);
                 } else if (!nameRowFlag && (typeBeginFlag || dataEndFlag)) {
                     typeArray.push(ele[4]);
                 };
